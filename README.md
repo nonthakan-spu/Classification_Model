@@ -2,7 +2,20 @@
 ## จุดประสงค์
 เพื่อทำการแยกแยะโรคที่เกิดขึ้นในทุเรียนจากใบของทุเรียนด้วยโมเดล CNN โดยการทำ Fine-tuned โมเดล EfficientNet-B0 
 ## ขั้นตอนการทำงาน
-### 1.เตรียมชุดข้อมูล
+### 1.import ไลบรารี่ที่จำเป็น และกำหนดค่าพื้นฐาน
+ทำการ import ไลบรารี่ที่จำเป็นต้องใช้ และตั้งค่าตัวแปรต่างๆ
+```python
+import tensorflow as tf
+import tensorflow_datasets as tfds
+import matplotlib.pyplot as plt
+from tensorflow.keras import layers
+
+# กำหนดค่าพารามิเตอร์ต่างๆ
+IMG_SIZE = 224  # ขนาดรูปภาพที่ EfficientNetB0 ต้องการ
+BATCH_SIZE = 32 # จำนวนข้อมูลที่ส่งให้โมเดลในแต่ละรอบ
+EPOCHS = 50      # จำนวนรอบในการเทรนโมเดล
+```
+### 2.เตรียมชุดข้อมูล
 นำชุดข้อมูลที่มีมาทำการแบ่งออกเป็น 3 ชุดด้วยกันคือ train, validation และ test ซึ่งโดยทั่วไปแล้วจะถูกแบ่งเป็น traint 70%, validation 10% และ test 20% ถ้าในกรณีที่ชุดข้อมูลมีน้อยหรือจำกัดมากสามารถทำการ Augmented เพื่อเพิ่มข้อมูลที่ใช้ในการฝึกได้ ในที่นี้จะทำการ augmentation เพื่อเพิ่มข้อมูลด้วย
 ```python
 # สร้างเลเยอร์สำหรับเพิ่มข้อมูล augmented
@@ -75,7 +88,7 @@ print(f"\nจำนวนข้อมูลใน train_ds: {tf.data.experimenta
 print(f"จำนวนข้อมูลใน val_ds: {tf.data.experimental.cardinality(val_ds).numpy()}")
 print(f"จำนวนข้อมูลใน test_ds: {tf.data.experimental.cardinality(test_ds).numpy()}")
 ```
-### 2.การสร้าง Pipeline ของชุดข้อมูล
+### 3.การสร้าง Pipeline ของชุดข้อมูล
 การสร้าง Pipeline ของชุดข้อมูลนั้นเพื่อความง่ายและสะดวกในการจัดการข้อมูล เพื่อไม่ใช้เกิดข้อมูลผิดพลาดก่อนนำไปฝึกโมเดล
 ```python
 # สร้างตัวแปรเก็บจำนวนคลาสทั้งหมด
@@ -107,7 +120,7 @@ test_ds = (test_ds
            .batch(BATCH_SIZE) # เพิ่ม Batching
            .cache().prefetch(tf.data.AUTOTUNE))
 ```
-### 3.โหลดโมเดล EfficientNet-B0 และ Freezing Layers
+### 4.โหลดโมเดล EfficientNet-B0 และ Freezing Layers
 ทำการโหลดโมเดล EfficientNet-B0 โดยไม่ต้องโหลดส่วนของ Top Layers มาด้วย เนื่องจากเราจะสร้างในส่วนของ Top Layers เองเพื่อให้จำนวนคลาส Output เป็นไปตามจำนวนคลาสของชุดข้อมูลของเรา และทำการ Freezing Layers เพื่อหยุดการเรียนรู้ของ Layers ล่างทั้งหมดเพื่อไม่ให้ได้รับผลกระทบจากชุดข้อมูลใหม่ที่เรากำลังจะให้โมเดลฝึก เนื่องจากเราจำเป็นต้องใช้ความสามารถของ Layer ล่างๆ ในการแยกแยะขอบ มุม หรือ สีของใบที่โมเดลได้ถูกฝึกมาด้วยชุดข้อมูลอันมหาศาล
 ```python
 # โหลด EfficientNetB0 ที่เทรนด้วย 'imagenet'
@@ -121,7 +134,7 @@ base_model_aug = tf.keras.applications.EfficientNetB0(
 # ทำการ "แช่แข็ง" ไม่ให้เลเยอร์ของ base_model_aug ถูกเทรนใหม่
 base_model_aug.trainable = False
 ```
-### 4.สร้าง Output Layers
+### 5.สร้าง Output Layers
 สร้างส่วนของ Top Layers เพื่อใช้ในการฝึกชุดข้อมูลใหม่
 ```python
 # สร้างโมเดลใหม่โดยเริ่มจาก base_model_aug ที่เราโหลดมา
@@ -133,7 +146,7 @@ outputs = tf.keras.layers.Dense(NUM_CLASSES, activation='softmax', dtype='float3
 
 model_aug = tf.keras.Model(inputs, outputs)
 ```
-### 5.ทำการคอมไฟล์โมเดลและฝึกโมเดล
+### 6.ทำการคอมไฟล์โมเดลและฝึกโมเดล
 สร้างส่วนของ Callbacks ขึ้นมาเพื่อสร้าง checkpoint, early stop และ ปรับอัตราการเรียนรู้เมื่อผ่านไปสักระยะ ทำการคอมไฟล์โมเดลและนำชุดข้อมูล train มาทำการฝึกโมเดลและชุดข้อมูล validation เพื่อทดสอบระหว่างเรียนรู้
 ```python
 # กำหนด Optimizer, Loss Function, และ Metrics
@@ -161,7 +174,7 @@ history_aug = model_aug.fit(
 )
 print("--- การเทรนโมเดลเสร็จสิ้น ---\n")
 ```
-### 6.การวัดผล
+### 7.การวัดผล
 นำชุดข้อมูล test มาทำการทดสอบโมเดลเพื่อวัดผลโมเดลว่าการเรียนรู้ของชุดข้อมูล train นั้นสามารถนำมาใช้งานบนชุดข้อมูลที่ไม่เคยเห็นได้ดีแค่ไหน
 ```python
 print("--- เริ่มการวัดผลโมเดลด้วย Test Set ---")
@@ -172,3 +185,4 @@ print(f"Test Accuracy: {accuracy:.4f}")
 print(f"Test AUC: {auc:.4f}")
 ```
 ## สรุปผลการทดลอง
+จากการทดลองพบว่าเมื่อทำการ augmentation ข้อมูลก่อนนำไปเทรนจะทำให้ระยะเวลาในการเทรนเพิ่มขึ้นอย่างเห็นได้ชัด แต่จำนวนรอบในการเทรนนั้นน้อยกว่าโมเดลที่ถูกเทรนด้วยข้อมูลที่ไม่ผ่านการ augmentation ส่วนความแม่นยำนั้นไม่ต่างกันมาก อยู่ที่ราวๆ 99.7% - 99.9% ทั้งโมเดลที่เทรนด้วยข้อมูล 2,818 ภาพ และโมเดลที่ถูกเทรนด้วยข้อมูล 1,000 ภาพ 
